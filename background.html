@@ -1,0 +1,51 @@
+<!DOCTYPE html>
+<html>
+  <head></head>
+  <body>
+  	<script src="jquery.js" type="text/javascript"></script>
+  
+    <script>
+	
+	var hud = false;
+	
+	function hudVisible()
+	{
+		return hud;
+	}
+	
+	function setHudVisible(v)
+	{
+		hud = v;
+	}
+	
+	/*
+    function bid(tabID, callback) 
+    { 
+        // Add the callback to the queue
+		// callbacks[tabID] = callback;	
+        // Injects the content script into the current page 		
+        chrome.tabs.executeScript(tabID, { file: "bidscript.js" }); 
+    };
+    */
+    
+    var pageInfoCallback;
+    function onPageInfo(callback)
+    {
+    	pageInfoCallback = callback;
+    }
+	
+    chrome.extension.onRequest.addListener(
+        function(request, sender, sendResponse) {	
+			if (request.type == "setHudVisible") {
+				setHudVisible(request.visible);
+				return;
+			}
+			if (request.type == "hudVisible") {
+				return hudVisible();
+			}
+            pageInfoCallback(request);
+	  });
+	  
+    </script>
+  </body>
+</html>

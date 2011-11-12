@@ -1,0 +1,5 @@
+This project provides a heads-up display for penny auction sites. It is a Google Chrome extension, and it allows you to watch multiple auctions from a single window, view statistics about bidders in an auction (how many times each one has bid, etc.) and place bids. 
+
+To try it out, grab all of the files from the project. Put them in a directory, say C:\HUD. Open Chrome. Go to Options -> Extensions. Click Load Unpacked Extension. Browse to C:\HUD. Close the options. Open a new tab and go to www.quibids.com (no account required). Click on a live auction. Click on the extension in the top-right corner of Chrome (it is the square with red, blue, yellow, and green) and click Start. The HUD will open in a new window. Click Active next to the auction you're watching to show data about the users currently bidding. You can open several tabs, and the HUD will track them all. You can also bid from the HUD.
+
+This project is a work in progress! It currently supports quibids. Other sites are on the way.

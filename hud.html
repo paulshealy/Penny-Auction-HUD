@@ -1,0 +1,276 @@
+
+<script src="jQuery.js" type="text/javascript"></script>
+<script src="time.js" type="text/javascript"></script>
+<script src="auctionData.js" type="text/javascript"></script>
+<script src="auctionDisplay.js" type="text/javascript"></script>
+<script src="autobid.js" type="text/javascript"></script>
+<link rel="stylesheet" type="text/css" href="hud.css" />
+
+<script>
+
+// array of tabs to watch
+var tabIDs = [];
+
+function updateTab(tabID, changeInfo, tab) {
+	var watchingTab = false;
+	tabIDs.forEach(function (t) {
+		if (t == tabID)
+			watchingTab = true;
+	});
+	
+	if (!watchingTab && isPennyAuctionSite(tab.url)) {		
+		addTab(tab);
+	}
+	else if (watchingTab
+		&& (changeInfo.url != undefined)
+		&& !isPennyAuctionSite(tab.url))
+	{
+		removeTabID(tabID);
+	}
+	else if (watchingTab)
+	{
+		addContentScript(tab);
+	}
+}
+
+function removeTabID(tabID) {
+	var newTabIDs = [];
+	tabIDs.forEach(function (t) {
+		if (t != tabID)
+			newTabIDs.push(t);
+	});
+	tabIDs = newTabIDs;
+	var rowNumber = auctionData[tabID].rowNumber;
+	delete auctionData[tabID];
+	/* Move everything "below" the row we just removed
+	 */
+	for (var row = rowNumber + 1; row <= lastItem; row++) {
+		auctionData[auctionRows[row]].rowNumber = row - 1;
+		auctionRows[row - 1] = auctionRows[row];
+		auctionRows[row - 1].isDirty = true;
+	}
+	row = row - 1;
+	delete auctionData[row];
+	delete auctionRows[lastItem];
+	clearRow(lastItem);
+
+	lastItem = lastItem - 1;
+	dataChanged = true;
+}
+
+function addContentScript(tab) {
+	var tabID = tab.id;
+    chrome.tabs.executeScript(tabID, { code: "var tabID = " + tabID + ";" }); 
+        
+	var url = tab.url;
+		
+	if (url.substring(0, "http://www.bidrivals.com".length) == "http://www.bidrivals.com") {
+		chrome.tabs.executeScript(tabID, { file: "time.js" }); 
+		chrome.tabs.executeScript(tabID, { file: "bidrivals.js" }); 
+		return;
+	}
+		
+	if (url.substring(0, "http://www.quibids.com".length) == "http://www.quibids.com") {	
+		chrome.tabs.executeScript(tabID, { file: "time.js" }); 	
+		chrome.tabs.executeScript(tabID, { file: "quibids.js" });
+		return;
+	}
+	alert('Could not identify page.');
+}
+
+function removeTab(tabID, removeInfo) {
+	removeTabID(tabID);
+	
+   	chrome.tabs.executeScript(tabID, { code: "stopRefresh();" }); 
+}
+
+function findWindows() {
+	chrome.windows.getAll({populate: true}, findTabs);
+}
+
+function findTabs(windows) {
+	windows.forEach(function(window) {
+		window.tabs.forEach(function(tab) {	
+			addTab(tab);
+		});
+	});
+}
+
+function isPennyAuctionSite(url) {
+	var host = jQuery.url.setUrl(url).attr("host");
+	if (host == "www.quibids.com") {
+		var slashLoc = url.lastIndexOf('/');
+		var shortUrl = url.substring(slashLoc + 1);
+		var dashLoc = shortUrl.indexOf('-');
+		if (dashLoc < 0)
+			return false;
+
+		return true;
+	}
+	if (host == "www.bidrivals.com") {
+		try {
+			var slashLoc = url.lastIndexOf('/');
+			var shortUrl = url.substring(slashLoc + 1);
+			var dashLoc = shortUrl.indexOf('-');
+			if (dashLoc < 0)
+				return false;
+
+			return true;
+		}
+		catch (err) {
+			return false;
+		}
+	}
+	return false;
+}
+
+function addTab(tab) {
+	if (isPennyAuctionSite(tab.url)) {	
+		tabIDs.push(tab.id);
+		addContentScript(tab);
+	}
+}
+
+var timerID2 = 0;
+
+function start() {	
+	chrome.extension.getBackgroundPage().onPageInfo(savePageInfo);
+
+	chrome.tabs.onUpdated.addListener(updateTab);
+	chrome.tabs.onRemoved.addListener(removeTab);
+	
+	findWindows();
+	
+	timerID2 = setInterval("checkForDataChanged()", 50);
+}
+
+function checkForDataChanged() {
+	if (dataChanged) {
+		dataChanged = false;
+		updateDisplay();
+	}
+}
+
+function stop(auctionID) {
+	//clearInterval(timerID2);
+}
+
+function hasCompleteBidHistory() {
+	var expectedBids = Math.floor(currentPrice * 100);
+	return expectedBids == bidHistory.length;
+}
+
+function close() {
+	window.close();
+}
+
+function saveData() {
+	if (itemWorth == null)
+		return;
+	
+	jQuery.get("http://auctiondata2.appspot.com/AddAuction",
+	{AuctionID : auctionID, Price: currentPrice, Description: encodeURI(description), endDate: encodeURI(endDate), ItemWorth: itemWorth}
+	);
+	
+	for (var i = 0; i < bidHistory.length; ++i) {
+		jQuery.get("http://auctiondata2.appspot.com/AddBid",
+			{AuctionID : auctionID, 
+			UserID: bidHistory[i].bidder, 
+			Price: bidHistory[i].price, 
+			Type: bidHistory[i].bidType});
+	}
+}
+
+start();
+
+</script>
+
+<table class="Auctions">
+<tr class="Header">
+<td class="Header H1 L">Auction</td>
+<td class="Header H2"></td>
+<td class="Header H3">Time</td>
+<td class="Header H4">Price</td>
+<td class="Header H5 R" colspan=3></td>
+</tr>
+
+<tr id="a0" class="L">
+<td id="D0"></td>
+<td><img id="im0" class="warning" src="run.png"></img></td>
+<td id="T0"></td>
+<td id="P0" class="P"></td>
+<td><input type="button" value="Active" id="B0" /></td>
+<td class="R"><input type="button" value="Bid" id="S0" /></td>
+</tr>
+
+<tr id="a1" class="alt L">
+<td id="D1"></td>
+<td><img id="im1" class="warning" src="run.png"></img></td>
+<td id="T1"></td>
+<td id="P1" class="P"></td>
+<td><input type="button" value="Active" id="B1" /></td>
+<td class="R"><input type="button" value="Bid" id="S1" /></td>
+</tr>
+
+<tr id="a2" class="L">
+<td id="D2"></td>
+<td><img id="im2" class="warning" src="run.png"></img></td>
+<td id="T2"></td>
+<td id="P2" class="P"></td>
+<td><input type="button" value="Active" id="B2" /></td>
+<td class="R"><input type="button" value="Bid" id="S2" /></td>
+</tr>
+
+<tr id="a3" class="alt L">
+<td id="D3"></td>
+<td><img id="im3" class="warning" src="run.png"></img></td>
+<td id="T3"></td>
+<td id="P3" class="P"></td>
+<td><input type="button" value="Active" id="B3" /></td>
+<td class="R"><input type="button" value="Bid" id="S3" /></td>
+</tr>
+
+<tr id="a4" class="L">
+<td id="D4"></td>
+<td><img id="im4" class="warning" src="run.png"></img></td>
+<td id="T4"></td>
+<td id="P4" class="P"></td>
+<td><input type="button" value="Active" id="B4" /></td>
+<td class="R"><input type="button" value="Bid" id="S4" /></td>
+</tr>
+
+</table>
+
+<table class="users">	
+<tr class="Header"><td class="Header H1 L">Bidder</td><td class="Header H2">Bids</td><td class="Header H3 R">Profit</td></tr>
+<tr><td id="ud0" class="D"></td><td id="ub0"></td><td id="up0" class="R"></td>
+</tr>
+<tr><td id="ud1" class="D alt"></td><td id="ub1" class="alt"></td><td id="up1" class="alt R"></td>
+</tr>
+<tr><td id="ud2" class="D"></td><td id="ub2"></td><td id="up2" class="R"></td>
+</tr>
+<tr><td id="ud3" class="D alt"></td><td id="ub3" class="alt"></td><td id="up3" class="alt R"></td>
+</tr>
+<tr><td id="ud4" class="D"></td><td id="ub4"></td><td id="up4" class="R"></td>
+</tr>
+<tr><td id="ud5" class="D alt"></td><td id="ub5" class="alt"></td><td id="up5" class="alt R"></td>
+</tr>
+<tr><td id="ud6" class="D"></td><td id="ub6"></td><td id="up6" class="R"></td>
+</tr>
+<tr><td id="ud7" class="D alt"></td><td id="ub7" class="alt"></td><td id="up7" class="alt R"></td>
+</tr>
+<tr><td id="ud8" class="D"></td><td id="ub8"></td><td id="up8" class="R"></td>
+</tr>
+<tr><td id="ud9" class="D alt"></td><td id="ub9" class="alt"></td><td id="up9" class="alt R"></td>
+</tr>
+<tr><td id="ud10" class="D"></td><td id="ub10"></td><td id="up10" class="R"></td>
+</tr>
+<tr><td id="ud11" class="D alt"></td><td id="ub11" class="alt"></td><td id="up11" class="alt R"></td>
+</tr>
+<tr><td id="ud12" class="D"></td><td id="ub12"></td><td id="up12" class="R"></td>
+</tr>
+<tr><td id="ud13" class="D alt"></td><td id="ub13" class="alt"></td><td id="up13" class="alt R"></td>
+</tr>
+<tr><td id="ud14" class="D"></td><td id="ub14"></td><td id="up14" class="R"></td>
+</tr>
+</table>

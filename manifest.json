@@ -1,0 +1,20 @@
+{
+  "name": "A penny auction heads-up display.",
+  "version": "1.0",
+  
+  "background_page" : "background.html",
+  
+  "permissions": [
+    "tabs", "http://*/*", "https://*/*"
+  ],
+  "browser_action": {
+      "default_title": "Penny Auction HUD",
+      "default_icon": "icon.png",
+      "popup": "popup.html"
+  },
+  
+  "content_scripts": [{
+		"matches": ["http://*/*", "https://*/*"],
+		"js": ["jquery.js"]
+  }]
+}
